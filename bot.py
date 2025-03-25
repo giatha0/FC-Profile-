@@ -6,7 +6,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Gọi API tương ứng
+# Gửi POST request theo loại dữ liệu
 def fetch_metadata(data_list, mode):
     endpoints = {
         "wallet": "https://graph.cast.k3l.io/metadata/handles",
@@ -21,16 +21,22 @@ def fetch_metadata(data_list, mode):
     headers = {'Content-Type': 'application/json'}
     data = json.dumps(data_list)
 
+    print(f"\n🔗 POST tới: {url}")
+    print(f"📤 Payload:\n{data}\n")
+
     try:
         response = requests.post(url, headers=headers, data=data)
+        print(f"📥 Response status: {response.status_code}")
+        print(f"📥 Response content: {response.text[:300]}")
+        
         if response.status_code == 200:
             return response.json()
         else:
-            return {"error": f"Lỗi API: {response.status_code}"}
+            return {"error": f"Lỗi API: {response.status_code}", "detail": response.text}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": "Exception khi gọi API", "detail": str(e)}
 
-# Phân loại & xử lý dữ liệu
+# Xử lý tin nhắn
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message.text.strip()
     lines = message.splitlines()
@@ -45,7 +51,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             continue
 
         if text.isdigit() and len(text) <= 10:
-            fids.append(int(text))  # chuyển sang số
+            fids.append(int(text))  # quan trọng: giữ FID là số nguyên
         elif len(text) <= 20:
             usernames.append(text)
         else:
@@ -68,10 +74,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result_fid = fetch_metadata(fids, "fid")
         responses.append(("📬 Kết quả FID:", result_fid))
 
-    # Gửi kết quả từng phần
     for label, result in responses:
-        result_text = json.dumps(result, indent=2, ensure_ascii=False)
-        await update.message.reply_text(f"{label}\n```json\n{result_text}\n```", parse_mode='Markdown')
+        try:
+            result_text = json.dumps(result, indent=2, ensure_ascii=False)
+            await update.message.reply_text(f"{label}\n```json\n{result_text}\n```", parse_mode='Markdown')
+        except Exception as e:
+            await update.message.reply_text(f"{label}\n⚠️ Gặp lỗi khi xử lý kết quả.\n{str(e)}")
 
     if not fids and not usernames and not wallets:
         await update.message.reply_text("⚠️ Không phát hiện dữ liệu hợp lệ.")
