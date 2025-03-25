@@ -95,9 +95,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📬 Kết quả `{username}`:\n"
                 f"- fname: `{fname}`\n"
                 f"- fid: `{fid}`\n"
-                f"- addresses:\n```{addresses_text}```",
+                f"- addresses:\n{addresses_text}",
                 parse_mode='Markdown'
             )
+
 
     # --- XỬ LÝ ĐỊA CHỈ VÍ ---
     if wallets:
