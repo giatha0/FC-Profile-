@@ -64,14 +64,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             fid = fids[0]
             await update.message.reply_text(f"🔍 Đang tra cứu FID: {fid}", parse_mode='Markdown')
             result = fetch_metadata([fid], "fid")
+
             first_entry = result.get("result", [{}])[0]
             fname = first_entry.get("fname", "Không có")
             username = first_entry.get("username", "Không có")
 
+            all_addresses = {entry.get("address") for entry in result.get("result", []) if entry.get("address")}
+            addresses_text = "\n".join(f"`{addr}`" for addr in all_addresses) if all_addresses else "Không có"
+
             await update.message.reply_text(
                 f"📬 Kết quả FID `{fid}`:\n"
                 f"- fname: `{fname}`\n"
-                f"- username: `{username}`",
+                f"- username: `{username}`\n"
+                f"- addresses:\n{addresses_text}",
                 parse_mode='Markdown'
             )
 
