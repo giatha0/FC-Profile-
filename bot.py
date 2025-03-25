@@ -1,12 +1,13 @@
 import json
 import os
 import requests
+from io import BytesIO
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Gửi POST request theo loại dữ liệu
+# Gọi API theo loại
 def fetch_metadata(data_list, mode):
     endpoints = {
         "wallet": "https://graph.cast.k3l.io/metadata/handles",
@@ -26,9 +27,8 @@ def fetch_metadata(data_list, mode):
 
     try:
         response = requests.post(url, headers=headers, data=data)
-        print(f"📥 Response status: {response.status_code}")
-        print(f"📥 Response content: {response.text[:300]}")
-
+        print(f"📥 Status: {response.status_code}")
+        print(f"📥 Nội dung: {response.text[:300]}")
         if response.status_code == 200:
             return response.json()
         else:
@@ -36,7 +36,7 @@ def fetch_metadata(data_list, mode):
     except Exception as e:
         return {"error": "Exception khi gọi API", "detail": str(e)}
 
-# Xử lý tin nhắn từ Telegram
+# Xử lý tin nhắn
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message.text.strip()
     lines = message.splitlines()
@@ -49,7 +49,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = line.strip()
         if not text:
             continue
-
         if text.isdigit() and len(text) <= 10:
             fids.append(int(text))
         elif len(text) <= 20:
@@ -57,40 +56,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             wallets.append(text)
 
-    responses = []
-
-    # Xử lý địa chỉ ví
-    if wallets:
-        await update.message.reply_text(f"🔍 Đang tra cứu {len(wallets)} địa chỉ ví...", parse_mode='Markdown')
-        result_wallet = fetch_metadata(wallets, "wallet")
-        responses.append(("📬 Kết quả địa chỉ ví:", result_wallet))
-
-    # Xử lý ENS username
-    if usernames:
-    if len(usernames) > 1:
-        await update.message.reply_text("⚠️ Chỉ hỗ trợ tra cứu **1 username** mỗi lần. Vui lòng gửi từng ENS riêng lẻ.")
-    else:
-        username = usernames[0]
-        await update.message.reply_text(f"🔍 Đang tra cứu username: {username}", parse_mode='Markdown')
-        result = fetch_metadata([username], "username")
-
-        first_entry = result.get("result", [{}])[0]
-        fname = first_entry.get("fname", "Không có")
-        fid = first_entry.get("fid", "Không có")
-
-        # Gom danh sách địa chỉ (duy nhất)
-        all_addresses = {entry.get("address") for entry in result.get("result", []) if entry.get("address")}
-        addresses_text = "\n".join(all_addresses) if all_addresses else "Không có"
-
-        await update.message.reply_text(
-            f"📬 Kết quả `{username}`:\n"
-            f"- fname: `{fname}`\n"
-            f"- fid: `{fid}`\n"
-            f"- addresses:\n```{addresses_text}```",
-            parse_mode='Markdown'
-        )
-
-    # Xử lý FID (chỉ 1 FID mỗi lần)
+    # --- XỬ LÝ FID ---
     if fids:
         if len(fids) > 1:
             await update.message.reply_text("⚠️ Chỉ hỗ trợ tra cứu **1 FID mỗi lần**. Vui lòng gửi từng FID riêng lẻ.")
@@ -98,43 +64,65 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             fid = fids[0]
             await update.message.reply_text(f"🔍 Đang tra cứu FID: {fid}", parse_mode='Markdown')
             result = fetch_metadata([fid], "fid")
-
-            # Lấy bản ghi đầu tiên trong danh sách
             first_entry = result.get("result", [{}])[0]
             fname = first_entry.get("fname", "Không có")
             username = first_entry.get("username", "Không có")
 
             await update.message.reply_text(
-                f"📬 Kết quả FID {fid}:\n- fname: `{fname}`\n- username: `{username}`",
+                f"📬 Kết quả FID `{fid}`:\n"
+                f"- fname: `{fname}`\n"
+                f"- username: `{username}`",
                 parse_mode='Markdown'
             )
 
-    # Trả kết quả cho ví và username (nếu có)
-    for label, result in responses:
+    # --- XỬ LÝ USERNAME ---
+    if usernames:
+        if len(usernames) > 1:
+            await update.message.reply_text("⚠️ Chỉ hỗ trợ tra cứu **1 username ENS mỗi lần**. Vui lòng gửi riêng từng username.")
+        else:
+            username = usernames[0]
+            await update.message.reply_text(f"🔍 Đang tra cứu username: {username}", parse_mode='Markdown')
+            result = fetch_metadata([username], "username")
+
+            first_entry = result.get("result", [{}])[0]
+            fname = first_entry.get("fname", "Không có")
+            fid = first_entry.get("fid", "Không có")
+
+            all_addresses = {entry.get("address") for entry in result.get("result", []) if entry.get("address")}
+            addresses_text = "\n".join(all_addresses) if all_addresses else "Không có"
+
+            await update.message.reply_text(
+                f"📬 Kết quả `{username}`:\n"
+                f"- fname: `{fname}`\n"
+                f"- fid: `{fid}`\n"
+                f"- addresses:\n```{addresses_text}```",
+                parse_mode='Markdown'
+            )
+
+    # --- XỬ LÝ ĐỊA CHỈ VÍ ---
+    if wallets:
+        await update.message.reply_text(f"🔍 Đang tra cứu {len(wallets)} địa chỉ ví...", parse_mode='Markdown')
+        result_wallet = fetch_metadata(wallets, "wallet")
         try:
-            result_text = json.dumps(result, indent=2, ensure_ascii=False)
-
+            result_text = json.dumps(result_wallet, indent=2, ensure_ascii=False)
             if len(result_text) > 3500:
-                from io import BytesIO
-                file_buffer = BytesIO()
-                file_buffer.write(result_text.encode("utf-8"))
-                file_buffer.seek(0)
-
+                buffer = BytesIO()
+                buffer.write(result_text.encode("utf-8"))
+                buffer.seek(0)
                 await update.message.reply_document(
-                    document=file_buffer,
-                    filename="result.json",
-                    caption=f"{label} (đính kèm file)"
+                    document=buffer,
+                    filename="wallet_result.json",
+                    caption="📬 Kết quả ví (đính kèm file)"
                 )
             else:
-                await update.message.reply_text(f"{label}\n```json\n{result_text}\n```", parse_mode='Markdown')
-
+                await update.message.reply_text(f"📬 Kết quả ví:\n```json\n{result_text}\n```", parse_mode='Markdown')
         except Exception as e:
-            await update.message.reply_text(f"{label}\n⚠️ Gặp lỗi khi xử lý kết quả.\n{str(e)}")
+            await update.message.reply_text(f"⚠️ Lỗi khi xử lý JSON ví.\n{str(e)}")
 
     if not fids and not usernames and not wallets:
         await update.message.reply_text("⚠️ Không phát hiện dữ liệu hợp lệ.")
 
-# Chạy bot
+# Khởi động bot
 if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     handler = MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message)
