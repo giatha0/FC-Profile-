@@ -4,14 +4,14 @@ import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 
-# Lấy token từ biến môi trường
+# Lấy token bot từ biến môi trường
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Hàm gọi API bên ngoài với địa chỉ ví
-def fetch_metadata(wallet_address):
+# Gửi danh sách địa chỉ ví tới API
+def fetch_metadata(address_list):
     url = "https://graph.cast.k3l.io/metadata/handles"
     headers = {'Content-Type': 'application/json'}
-    data = json.dumps([wallet_address])
+    data = json.dumps(address_list)
 
     try:
         response = requests.post(url, headers=headers, data=data)
@@ -26,15 +26,21 @@ def fetch_metadata(wallet_address):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message.text.strip()
 
-    # Kiểm tra xem có phải địa chỉ ví hợp lệ không
-    if message.startswith("0x") and len(message) == 42:
-        await update.message.reply_text(f"🔍 Đang tra cứu địa chỉ: `{message}`", parse_mode='Markdown')
+    # Tách dòng và lọc địa chỉ ví hợp lệ
+    lines = message.splitlines()
+    wallet_addresses = [line.strip() for line in lines if line.strip().startswith("0x") and len(line.strip()) == 42]
 
-        result = fetch_metadata(message)
-        result_text = json.dumps(result, indent=2, ensure_ascii=False)
-        await update.message.reply_text(f"📬 Kết quả:\n```json\n{result_text}\n```", parse_mode='Markdown')
-    else:
-        await update.message.reply_text("⚠️ Vui lòng gửi địa chỉ ví Ethereum bắt đầu bằng `0x`, dài 42 ký tự.", parse_mode='Markdown')
+    if not wallet_addresses:
+        await update.message.reply_text("⚠️ Không tìm thấy địa chỉ ví hợp lệ (bắt đầu bằng 0x, dài 42 ký tự).")
+        return
+
+    await update.message.reply_text(f"🔍 Đang truy vấn {len(wallet_addresses)} địa chỉ...", parse_mode='Markdown')
+
+    result = fetch_metadata(wallet_addresses)
+    result_text = json.dumps(result, indent=2, ensure_ascii=False)
+    
+    # Trả kết quả về group
+    await update.message.reply_text(f"📬 Kết quả:\n```json\n{result_text}\n```", parse_mode='Markdown')
 
 # Khởi động bot
 if __name__ == '__main__':
