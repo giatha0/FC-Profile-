@@ -67,9 +67,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Xử lý ENS username
     if usernames:
-        await update.message.reply_text(f"🔍 Đang tra cứu {len(usernames)} ENS username...", parse_mode='Markdown')
-        result_user = fetch_metadata(usernames, "username")
-        responses.append(("📬 Kết quả username:", result_user))
+    if len(usernames) > 1:
+        await update.message.reply_text("⚠️ Chỉ hỗ trợ tra cứu **1 username** mỗi lần. Vui lòng gửi từng ENS riêng lẻ.")
+    else:
+        username = usernames[0]
+        await update.message.reply_text(f"🔍 Đang tra cứu username: {username}", parse_mode='Markdown')
+        result = fetch_metadata([username], "username")
+
+        first_entry = result.get("result", [{}])[0]
+        fname = first_entry.get("fname", "Không có")
+        fid = first_entry.get("fid", "Không có")
+
+        # Gom danh sách địa chỉ (duy nhất)
+        all_addresses = {entry.get("address") for entry in result.get("result", []) if entry.get("address")}
+        addresses_text = "\n".join(all_addresses) if all_addresses else "Không có"
+
+        await update.message.reply_text(
+            f"📬 Kết quả `{username}`:\n"
+            f"- fname: `{fname}`\n"
+            f"- fid: `{fid}`\n"
+            f"- addresses:\n```{addresses_text}```",
+            parse_mode='Markdown'
+        )
 
     # Xử lý FID (chỉ 1 FID mỗi lần)
     if fids:
