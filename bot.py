@@ -89,7 +89,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             fid = first_entry.get("fid", "Không có")
 
             all_addresses = {entry.get("address") for entry in result.get("result", []) if entry.get("address")}
-            addresses_text = "\n".join(all_addresses) if all_addresses else "Không có"
+            addresses_text = "\n".join(f"`{addr}`" for addr in all_addresses) if all_addresses else "Không có"
 
             await update.message.reply_text(
                 f"📬 Kết quả `{username}`:\n"
