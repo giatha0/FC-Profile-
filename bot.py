@@ -52,9 +52,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text.isdigit() and len(text) <= 10:
             fids.append(int(text))
         elif len(text) <= 20:
-            usernames.append(text)
+            usernames.append(text.lower())  # chuyển username sang chữ thường
         else:
-            wallets.append(text)
+            wallets.append(text.lower())    # chuyển wallet sang chữ thường
 
     # --- Handle FID ---
     if fids:
