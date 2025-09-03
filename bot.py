@@ -123,10 +123,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     username_url = f"https://farcaster.xyz/{username_raw}" if username_raw else "N/A"
 
                     block = (
-                        f"*address* `{address}`\n"
-                        f"*fname* `{fname}`\n"
-                        f"*username* {username_url}\n"
-                        f"*fid* `{fid_val}`"
+                        f"*address:* `{address}`\n"
+                        f"*fname:* `{fname}`\n"
+                        f"*username:* {username_url}\n"
+                        f"*fid:* `{fid_val}`"
                     )
                     blocks.append(block)
 
