@@ -36,14 +36,6 @@ def fetch_metadata(data_list, mode):
     except Exception as e:
         return {"error": "Exception during API call", "detail": str(e)}
 
-def pre_block(text: str) -> str:
-    """
-    Trả về 1 code-block HTML cho 1 dòng để có nút Copy riêng.
-    Tránh đóng tag vô tình nếu payload có '</code>'.
-    """
-    safe = (text or "").replace("</code>", "</c0de>")
-    return f"<pre><code>{safe}</code></pre>"
-
 # Handle Telegram messages
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message.text.strip()
@@ -112,7 +104,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode='Markdown'
             )
 
-    # --- Handle Wallets (UPDATED: mỗi field là 1 code-block riêng để copy từng dòng) ---
+    # --- Handle Wallets (UPDATED: inline backticks + URL username + separator lines) ---
     if wallets:
         await update.message.reply_text(f"🔍 Looking up {len(wallets)} wallet address(es)...", parse_mode='Markdown')
         result_wallet = fetch_metadata(wallets, "wallet")
@@ -120,9 +112,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             entries = result_wallet.get("result", [])
             if isinstance(entries, list) and entries:
-                # Nếu có nhiều bản ghi, hiển thị theo từng khối; mỗi field là 1 code-block riêng
-                parts = ["📬 Wallet result:"]
-                for idx, item in enumerate(entries, 1):
+                # Build từng block, ngăn cách bằng '------'
+                blocks = []
+                for item in entries:
                     address = item.get("address", "N/A")
                     fname = item.get("fname", "N/A")
                     username_raw = item.get("username", "")
@@ -130,33 +122,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                     username_url = f"https://farcaster.xyz/{username_raw}" if username_raw else "N/A"
 
-                    if len(entries) > 1:
-                        parts.append(f"\n<b>— Record {idx} —</b>")
+                    block = (
+                        f"*address* `{address}`\n"
+                        f"*fname* `{fname}`\n"
+                        f"*username* {username_url}\n"
+                        f"*fid* `{fid_val}`"
+                    )
+                    blocks.append(block)
 
-                    parts.append(f"address:{pre_block(address)}")
-                    parts.append(f"fname:{pre_block(fname)}")
-                    parts.append(f"username:{pre_block(username_url)}")
-                    parts.append(f"fid:{pre_block(str(fid_val))}")
+                body = "📬 Wallet result:\n" + "\n------\n".join(blocks)
 
-                html = "\n".join(parts)
-                # Với HTML, mỗi <pre><code> là một khối có nút Copy riêng
-                # Tránh message quá dài; nếu dài quá thì đính file TXT (mỗi dòng 1 dòng thực)
-                if len(html) > 3500:
-                    # Build bản TXT gọn để copy khi quá dài
-                    txt_blocks = []
-                    for item in entries:
-                        address = item.get("address", "N/A")
-                        fname = item.get("fname", "N/A")
-                        username_raw = item.get("username", "")
-                        fid_val = item.get("fid", "N/A")
-                        username_url = f"https://farcaster.xyz/{username_raw}" if username_raw else "N/A"
-                        txt_blocks.append(
-                            f"address: {address}\n"
-                            f"fname: {fname}\n"
-                            f"username: {username_url}\n"
-                            f"fid: {fid_val}\n"
-                        )
-                    payload = "\n".join(txt_blocks)
+                # Nếu quá dài, đính kèm file .txt (cùng format) để đảm bảo gửi được
+                if len(body) > 3500:
+                    payload = "\n------\n".join(blocks)
                     buffer = BytesIO(payload.encode("utf-8"))
                     buffer.seek(0)
                     await update.message.reply_document(
@@ -165,7 +143,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         caption="📬 Wallet result (attached file)"
                     )
                 else:
-                    await update.message.reply_text(html, parse_mode="HTML")
+                    await update.message.reply_text(body, parse_mode='Markdown')
 
             else:
                 # Không có entries hợp lệ -> fallback JSON như cũ
@@ -180,10 +158,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         caption="📬 Wallet result (attached file)"
                     )
                 else:
-                    await update.message.reply_text(
-                        f"📬 Wallet result:\n<pre><code>{result_text.replace('</code>', '</c0de>')}</code></pre>",
-                        parse_mode="HTML"
-                    )
+                    await update.message.reply_text(f"📬 Wallet result:\n```json\n{result_text}\n```", parse_mode='Markdown')
 
         except Exception as e:
             # Fallback an toàn: JSON
@@ -199,10 +174,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         caption="📬 Wallet result (attached file)"
                     )
                 else:
-                    await update.message.reply_text(
-                        f"📬 Wallet result:\n<pre><code>{result_text.replace('</code>', '</c0de>')}</code></pre>",
-                        parse_mode="HTML"
-                    )
+                    await update.message.reply_text(f"📬 Wallet result:\n```json\n{result_text}\n```", parse_mode='Markdown')
             except Exception as e2:
                 await update.message.reply_text(f"⚠️ Error while parsing wallet response.\n{str(e)}\n{str(e2)}")
 
